@@ -3,6 +3,9 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-capable" content="yes">
+
 		<title>Run Routine</title>
 		<style>
 html, body, #canvas {
@@ -75,6 +78,15 @@ body {
 	text-align: center;
 	z-index: 1;
 }
+	#keepAlive {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0.001;
+      pointer-events: none;
+      top: 0;
+      left: 0;
+    }
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
@@ -94,6 +106,8 @@ body {
 			<progress id="status-progress"></progress>
 			<div id="status-notice"></div>
 		</div>
+
+		<div id="keepAlive"></div>
 
 		<script src="index.js"></script>
 		<script>
@@ -193,7 +207,91 @@ const engine = new Engine(GODOT_CONFIG);
 		}, displayFailureNotice);
 	}
 }());
+
+let wakeLock = null;
+let started = false;
+
+async function enableKeepAwake() {
+
+  if (started) return;
+  started = true;
+
+  // Fullscreen
+  if (document.documentElement.requestFullscreen) {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (e) {}
+  }
+
+  // Wake Lock API
+  if ("wakeLock" in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      console.log("Wake lock enabled");
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  // iPhone fallback
+  startIOSFallback();
+}
+
+function startIOSFallback() {
+
+  const el = document.getElementById("keepAlive");
+
+  let toggle = false;
+
+  setInterval(() => {
+
+    toggle = !toggle;
+
+    // Tiny invisible DOM update
+    el.style.opacity = toggle
+      ? "0.001"
+      : "0.002";
+
+    el.style.transform =
+      `translateX(${toggle ? 0 : 1}px)`;
+
+  }, 15000);
+}
+
+// Start after first user interaction
+[
+  "click",
+  "touchstart",
+  "keydown"
+].forEach(eventType => {
+
+  document.addEventListener(
+    eventType,
+    enableKeepAwake,
+    { once: true }
+  );
+
+});
+
+// Re-acquire wake lock
+document.addEventListener(
+  "visibilitychange",
+  async () => {
+
+    if (
+      wakeLock !== null &&
+      document.visibilityState === "visible"
+    ) {
+      try {
+        wakeLock =
+          await navigator.wakeLock.request("screen");
+      } catch (e) {}
+    }
+
+  }
+);
 		</script>
+
+		
 	</body>
 </html>
-
